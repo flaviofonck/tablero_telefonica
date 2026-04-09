@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero Backlog POs — Movistar Colombia</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: #003366;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    height: 48px;
+    gap: 16px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .topbar .logo {
+    font-size: 15px; font-weight: 700; color: #fff; letter-spacing: .5px;
+    border-right: 1px solid rgba(255,255,255,.25); padding-right: 16px;
+  }
+  .topbar .logo span { color: #00B5E2; }
+  .topbar .title { font-size: 13px; color: rgba(255,255,255,.8); flex:1; }
+  .topbar .badge {
+    background: rgba(255,255,255,.12); color: #fff;
+    font-size: 11px; padding: 3px 10px; border-radius: 20px;
+  }
+
+  /* ── PAGE TABS ── */
+  .tabs {
+    background: #fff;
+    border-bottom: 2px solid #e0e4ea;
+    display: flex;
+    padding: 0 20px;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 11px 18px;
+    font-size: 12.5px;
+    color: #555;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    transition: all .15s;
+    user-select: none;
+  }
+  .tab:hover { color: #003366; background: #f5f8ff; }
+  .tab.active { color: #003366; font-weight: 700; border-bottom-color: #003366; }
+
+  /* ── LAYOUT ── */
+  .layout { display: flex; min-height: calc(100vh - 88px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px; min-width: 220px;
+    background: #fff;
+    border-right: 1px solid #e0e4ea;
+    padding: 16px 12px;
+    overflow-y: auto;
+  }
+  .sidebar h4 {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: #888; margin-bottom: 10px; margin-top: 16px;
+  }
+  .sidebar h4:first-child { margin-top: 0; }
+  .filter-group {
+    background: #f7f9fc; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 8px;
+    border: 1px solid #e8ecf0;
+  }
+  .filter-group label {
+    font-size: 11px; color: #444; display: flex;
+    align-items: center; gap: 7px; margin-bottom: 5px; cursor: pointer;
+  }
+  .filter-group label:last-child { margin-bottom: 0; }
+  .filter-group input[type=checkbox] { accent-color: #003366; width: 13px; height: 13px; }
+  .filter-select {
+    width: 100%; font-size: 11px; padding: 5px 8px;
+    border: 1px solid #d0d5dd; border-radius: 4px; color: #333;
+    background: #fff;
+  }
+  .btn-filter {
+    width: 100%; padding: 7px; border: none; border-radius: 5px;
+    font-size: 11px; font-weight: 600; cursor: pointer; margin-top: 6px;
+  }
+  .btn-apply { background: #003366; color: #fff; }
+  .btn-clear { background: #f0f2f5; color: #555; border: 1px solid #d0d5dd; }
+  .date-input {
+    width: 100%; font-size: 11px; padding: 5px 8px;
+    border: 1px solid #d0d5dd; border-radius: 4px; color: #333;
+    margin-bottom: 4px;
+  }
+
+  /* ── MAIN CONTENT ── */
+  .main { flex: 1; padding: 16px; overflow: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .page-title {
+    font-size: 14px; font-weight: 700; color: #003366;
+    margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 2px solid #e0e4ea;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .page-title span { font-size: 11px; font-weight: 400; color: #888; }
+
+  /* ── GRID ROWS ── */
+  .row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .row.wrap { flex-wrap: wrap; }
+
+  /* ── KPI CARDS ── */
+  .kpi {
+    flex: 1; background: #fff; border-radius: 8px;
+    padding: 14px 16px; border: 1px solid #e0e4ea;
+    border-left: 4px solid #003366;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    min-width: 130px;
+  }
+  .kpi.green { border-left-color: #28A745; }
+  .kpi.orange { border-left-color: #FF6600; }
+  .kpi.teal { border-left-color: #00B5E2; }
+  .kpi.red { border-left-color: #DC3545; }
+  .kpi-label { font-size: 10.5px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: #1a1a2e; margin: 4px 0 2px; line-height: 1; }
+  .kpi-delta {
+    font-size: 11px; color: #28A745; font-weight: 600;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .kpi-delta.down { color: #DC3545; }
+  .kpi-sub { font-size: 10px; color: #aaa; margin-top: 2px; }
+
+  /* ── CHART CARDS ── */
+  .card {
+    background: #fff; border-radius: 8px; padding: 14px 16px;
+    border: 1px solid #e0e4ea;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    overflow: hidden;
+  }
+  .card.full { flex: 1; }
+  .card.half { flex: 1; min-width: 280px; }
+  .card.third { flex: 1; min-width: 200px; }
+  .card-title {
+    font-size: 12px; font-weight: 700; color: #003366;
+    margin-bottom: 10px; display: flex; justify-content: space-between;
+    align-items: center;
+  }
+  .card-title .tag {
+    font-size: 10px; font-weight: 400; color: #888;
+    background: #f0f2f5; padding: 2px 8px; border-radius: 10px;
+  }
+  .chart-wrap { position: relative; }
+  .chart-wrap.h180 canvas { max-height: 180px !important; }
+  .chart-wrap.h200 canvas { max-height: 200px !important; }
+  .chart-wrap.h220 canvas { max-height: 220px !important; }
+  .chart-wrap.h260 canvas { max-height: 260px !important; }
+
+  /* ── PROCESS FLOW ── */
+  .flow {
+    display: flex; align-items: center; gap: 0;
+    overflow-x: auto; padding: 8px 0;
+  }
+  .flow-step {
+    text-align: center; min-width: 100px;
+    position: relative;
+  }
+  .flow-box {
+    padding: 10px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+    border: 2px solid transparent;
+    margin: 0 4px;
+  }
+  .flow-box .count { font-size: 18px; font-weight: 800; display: block; }
+  .flow-box .label { font-size: 10px; }
+  .flow-box .mrr { font-size: 9.5px; margin-top: 3px; opacity: .8; }
+  .flow-arrow {
+    font-size: 18px; color: #aaa; flex-shrink: 0;
+    align-self: center; margin: 0 -2px;
+  }
+  .step-f1 { background: #e8f0fe; border-color: #003366; color: #003366; }
+  .step-pre { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
+  .step-mia { background: #fff3e0; border-color: #FF6600; color: #e65100; }
+  .step-cdg { background: #fce4ec; border-color: #c62828; color: #c62828; }
+  .step-ven { background: #e8f5e9; border-color: #2e7d32; color: #2e7d32; }
+  .step-com { background: #f3e5f5; border-color: #6a1b9a; color: #6a1b9a; }
+  .step-emi { background: #e0f7fa; border-color: #00838f; color: #00838f; }
+
+  /* ── APPROVAL PANEL ── */
+  .aprov-grid { display: flex; gap: 12px; }
+  .aprov-box {
+    flex: 1; border-radius: 8px; padding: 16px; text-align: center;
+    border: 1px solid #e0e4ea;
+  }
+  .aprov-box .icon { font-size: 28px; margin-bottom: 6px; }
+  .aprov-box .num { font-size: 32px; font-weight: 800; line-height: 1; }
+  .aprov-box .lbl { font-size: 11px; font-weight: 600; margin-top: 4px; }
+  .aprov-box .pct { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .aprov-box.apro { background: #e8f5e9; color: #2e7d32; }
+  .aprov-box.rech { background: #ffebee; color: #c62828; }
+  .aprov-box.canc { background: #f5f5f5; color: #555; }
+
+  /* ── PROCESS STAGES (compras) ── */
+  .stages { display: flex; gap: 8px; }
+  .stage-box {
+    flex: 1; border-radius: 6px; padding: 12px; text-align: center;
+    position: relative;
+  }
+  .stage-box::after {
+    content: '▶'; position: absolute; right: -12px; top: 50%;
+    transform: translateY(-50%); color: #aaa; font-size: 12px;
+  }
+  .stage-box:last-child::after { display: none; }
+  .stage-box .s-num { font-size: 24px; font-weight: 800; }
+  .stage-box .s-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-top: 2px; }
+  .stage-box .s-val { font-size: 11px; margin-top: 4px; opacity: .8; }
+  .s-rev { background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; }
+  .s-neg { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+  .s-for { background: #f3e5f5; color: #6a1b9a; border: 1px solid #ce93d8; }
+  .s-emi { background: #e8f5e9; color: #2e7d32; border: 1px solid #81c784; }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .data-table th {
+    background: #003366; color: #fff; padding: 8px 10px;
+    text-align: left; font-size: 11px;
+  }
+  .data-table td { padding: 7px 10px; border-bottom: 1px solid #eef0f3; }
+  .data-table tr:hover td { background: #f5f8ff; }
+  .badge-status {
+    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;
+  }
+  .badge-status.activo { background: #e8f5e9; color: #2e7d32; }
+  .badge-status.emitido { background: #e3f2fd; color: #1565c0; }
+  .badge-status.hold { background: #fff3e0; color: #e65100; }
+  .badge-status.cancel { background: #ffebee; color: #c62828; }
+
+  /* ── LEGEND ── */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── INFO BAR ── */
+  .info-bar {
+    background: #e8f0fe; border: 1px solid #c5d5f5; border-radius: 6px;
+    padding: 8px 14px; font-size: 11.5px; color: #003366;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
+
+  /* ── EMISSION CARDS ── */
+  .emi-cards { display: flex; gap: 12px; }
+  .emi-card {
+    flex: 1; border-radius: 8px; padding: 18px; text-align: center;
+    border: 2px solid;
+  }
+  .emi-card.po { background: #e3f2fd; border-color: #1565c0; color: #1565c0; }
+  .emi-card.ped { background: #e8f5e9; border-color: #2e7d32; color: #2e7d32; }
+  .emi-card .e-icon { font-size: 32px; margin-bottom: 8px; }
+  .emi-card .e-num { font-size: 38px; font-weight: 800; line-height: 1; }
+  .emi-card .e-lbl { font-size: 13px; font-weight: 700; margin-top: 4px; }
+  .emi-card .e-detail { font-size: 11px; margin-top: 8px; opacity: .8; }
+  .emi-card .e-pct { font-size: 20px; font-weight: 700; margin-top: 6px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #f0f2f5; }
+  ::-webkit-scrollbar-thumb { background: #c0c8d8; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">QCS · <span>Movistar</span></div>
+  <div class="title">Tablero de Control — Proceso Backlog POs · B2B</div>
+  <div class="badge">⬤ En vivo · Actualizado hoy 08:00</div>
+</div>
+
+<!-- PAGE TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="showPage(0)">📊 Visión Ejecutiva</div>
+  <div class="tab" onclick="showPage(1)">🔄 Trazabilidad</div>
+  <div class="tab" onclick="showPage(2)">✅ Aprobaciones</div>
+  <div class="tab" onclick="showPage(3)">🏷️ Clasificación CDG</div>
+  <div class="tab" onclick="showPage(4)">🏭 Vendor Management</div>
+  <div class="tab" onclick="showPage(5)">📦 Compras y Emisiones</div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR FILTERS -->
+  <aside class="sidebar">
+    <h4>📅 Período</h4>
+    <div class="filter-group">
+      <input class="date-input" type="date" value="2024-01-01">
+      <input class="date-input" type="date" value="2024-12-31">
+    </div>
+
+    <h4>⚙️ Etapa del Proceso</h4>
+    <div class="filter-group">
+      <label><input type="checkbox" checked> OPP F1</label>
+      <label><input type="checkbox" checked> Preaprobados</label>
+      <label><input type="checkbox" checked> Aprobación Miami</label>
+      <label><input type="checkbox" checked> CDG</label>
+      <label><input type="checkbox" checked> Vendor Management</label>
+      <label><input type="checkbox" checked> Compras</label>
+      <label><input type="checkbox" checked> Emitido</label>
+    </div>
+
+    <h4>🔵 Estado del Caso</h4>
+    <div class="filter-group">
+      <label><input type="checkbox" checked> En Curso</label>
+      <label><input type="checkbox" checked> Cancelado</label>
+      <label><input type="checkbox" checked> On Hold</label>
+      <label><input type="checkbox" checked> Emitido</label>
+    </div>
+
+    <h4>🏢 Cliente</h4>
+    <div class="filter-group">
+      <select class="filter-select">
+        <option>— Todos —</option>
+        <option>Cliente A</option>
+        <option>Cliente B</option>
+        <option>Cliente C</option>
+      </select>
+    </div>
+
+    <h4>🏭 Proveedor / Fabricante</h4>
+    <div class="filter-group">
+      <select class="filter-select">
+        <option>— Todos —</option>
+        <option>Fabricante A</option>
+        <option>Fabricante B</option>
+        <option>Fabricante C</option>
+      </select>
+    </div>
+
+    <h4>🏷️ Clasificación CDG</h4>
+    <div class="filter-group">
+      <label><input type="checkbox" checked> Requiere Compra</label>
+      <label><input type="checkbox" checked> No Requiere Compra</label>
+    </div>
+
+    <h4>📄 Tipo de Salida</h4>
+    <div class="filter-group">
+      <label><input type="checkbox" checked> PO</label>
+      <label><input type="checkbox" checked> Pedido</label>
+    </div>
+
+    <button class="btn-filter btn-apply">Aplicar Filtros</button>
+    <button class="btn-filter btn-clear">Limpiar</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ════════════════════════════════════════
+         PAGE 0: VISIÓN EJECUTIVA
+    ════════════════════════════════════════ -->
+    <div class="page active" id="page-0">
+      <div class="page-title">📊 Visión Ejecutiva Consolidada <span>Período: Ene – Dic 2024</span></div>
+
+      <!-- KPIs -->
+      <div class="row">
+        <div class="kpi">
+          <div class="kpi-label">Total OPP F1</div>
+          <div class="kpi-value">1,247</div>
+          <div class="kpi-delta">▲ +12% vs mes ant.</div>
+          <div class="kpi-sub">Casos ingresados al proceso</div>
+        </div>
+        <div class="kpi green">
+          <div class="kpi-label">MRR Total</div>
+          <div class="kpi-value">$45.2M</div>
+          <div class="kpi-delta">▲ +8% vs mes ant.</div>
+          <div class="kpi-sub">Monthly Recurring Revenue</div>
+        </div>
+        <div class="kpi orange">
+          <div class="kpi-label">CU Total</div>
+          <div class="kpi-value">$12.8M</div>
+          <div class="kpi-delta">▲ +5% vs mes ant.</div>
+          <div class="kpi-sub">Cost Upfront acumulado</div>
+        </div>
+        <div class="kpi teal">
+          <div class="kpi-label">Valor Promedio OPP</div>
+          <div class="kpi-value">$38.5K</div>
+          <div class="kpi-delta">▲ +3%</div>
+          <div class="kpi-sub">MRR por oportunidad</div>
+        </div>
+        <div class="kpi red">
+          <div class="kpi-label">Tasa Aprobación</div>
+          <div class="kpi-value">90%</div>
+          <div class="kpi-delta down">▼ -1pp vs mes ant.</div>
+          <div class="kpi-sub">Sobre casos evaluados</div>
+        </div>
+      </div>
+
+      <!-- Pipeline funnel + Temporal -->
+      <div class="row">
+        <div class="card" style="flex:2;">
+          <div class="card-title">Pipeline del Proceso F1 — Embudo de Conversión <span class="tag">Por etapa</span></div>
+          <div class="chart-wrap h220"><canvas id="chartFunnel"></canvas></div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="card-title">Distribución MRR por Fase <span class="tag">%</span></div>
+          <div class="chart-wrap h220"><canvas id="chartPieMRR"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Tendencia temporal -->
+      <div class="row">
+        <div class="card full">
+          <div class="card-title">Evolución Temporal MRR y Volumen — Últimos 12 Meses <span class="tag">Ene–Dic 2024</span></div>
+          <div class="chart-wrap h180"><canvas id="chartTemporal"></canvas></div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#003366"></div> MRR (eje izq.)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#FF6600"></div> CU (eje izq.)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#00B5E2"></div> # Casos (eje der.)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         PAGE 1: TRAZABILIDAD
+    ════════════════════════════════════════ -->
+    <div class="page" id="page-1">
+      <div class="page-title">🔄 Trazabilidad del Proceso F1 <span>Flujo punta a punta</span></div>
+
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-title">Flujo del Proceso Backlog POs — Volumen por Etapa</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-box step-f1">
+              <span class="count">1,247</span>
+              <span class="label">OPP F1</span>
+              <span class="mrr">$45.2M MRR</span>
+            </div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-box step-pre">
+              <span class="count">892</span>
+              <span class="label">Preaprobados</span>
+              <span class="mrr">$32.1M MRR</span>
+            </div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-box step-mia">
+              <span class="count">756</span>
+              <span class="label">Aprobación Miami</span>
+              <span class="mrr">$27.8M MRR</span>
+            </div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-box step-cdg">
+              <span class="count">680</span>
+              <span class="label">CDG</span>
+              <span class="mrr">$25.3M MRR</span>
+            </div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-box step-ven">
+              <span class="count">420</span>
+              <span class="label">Vendor Mgmt</span>
+              <span class="mrr">$18.5M MRR</span>
+            </div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-box step-com">
+              <span class="count">400</span>
+              <span class="label">Compras</span>
+              <span class="mrr">$17.2M MRR</span>
+            </div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-box step-emi">
+              <span class="count">630</span>
+              <span class="label">Emitido</span>
+              <span class="mrr">$33M MRR</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card half">
+          <div class="card-title">Tasa de Conversión por Etapa <span class="tag">%</span></div>
+          <div class="chart-wrap h200"><canvas id="chartConversion"></canvas></div>
+        </div>
+        <div class="card half">
+          <div class="card-title">Tiempo Promedio por Etapa (días hábiles) <span class="tag">SLA</span></div>
+          <div class="chart-wrap h200"><canvas id="chartSLA"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Tabla detalle -->
+      <div class="card">
+        <div class="card-title">Detalle de Oportunidades <span class="tag">Últimas 5 registradas</span></div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID OPP</th><th>Cliente</th><th>Etapa Actual</th>
+              <th>MRR</th><th>CU</th><th>Días en Etapa</th><th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>OPP-240001</td><td>Cliente A</td><td>CDG</td><td>$5,200</td><td>$1,800</td><td>3</td><td><span class="badge-status activo">Activo</span></td></tr>
+            <tr><td>OPP-240002</td><td>Cliente B</td><td>Compras</td><td>$12,400</td><td>$4,200</td><td>7</td><td><span class="badge-status activo">Activo</span></td></tr>
+            <tr><td>OPP-240003</td><td>Cliente C</td><td>Emitido</td><td>$8,700</td><td>$2,900</td><td>—</td><td><span class="badge-status emitido">Emitido</span></td></tr>
+            <tr><td>OPP-240004</td><td>Cliente D</td><td>Aprobación Miami</td><td>$3,500</td><td>$900</td><td>2</td><td><span class="badge-status hold">On Hold</span></td></tr>
+            <tr><td>OPP-240005</td><td>Cliente E</td><td>Vendor Mgmt</td><td>$18,200</td><td>$6,100</td><td>5</td><td><span class="badge-status activo">Activo</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         PAGE 2: APROBACIONES
+    ════════════════════════════════════════ -->
+    <div class="page" id="page-2">
+      <div class="page-title">✅ Vista de Aprobaciones — Miami <span>Cadena de aprobación F1</span></div>
+
+      <div class="info-bar">ℹ️ Tiempo promedio de aprobación: <strong>4.5 días hábiles</strong> · SLA objetivo: 5 días</div>
+
+      <!-- Panel estado -->
+      <div class="row" style="margin-bottom:12px;">
+        <div class="card full">
+          <div class="card-title">Panel de Estado — Aprobaciones Miami</div>
+          <div class="aprov-grid">
+            <div class="aprov-box apro">
+              <div class="icon">✅</div>
+              <div class="num">680</div>
+              <div class="lbl">APROBADOS</div>
+              <div class="pct">90%</div>
+            </div>
+            <div class="aprov-box rech">
+              <div class="icon">❌</div>
+              <div class="num">76</div>
+              <div class="lbl">NO APROBADOS</div>
+              <div class="pct">10%</div>
+            </div>
+            <div class="aprov-box canc">
+              <div class="icon">⊘</div>
+              <div class="num">45</div>
+              <div class="lbl">CANCELADOS</div>
+              <div class="pct">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card half">
+          <div class="card-title">Distribución de Aprobaciones <span class="tag">Proporción</span></div>
+          <div class="chart-wrap h200"><canvas id="chartAprov"></canvas></div>
+        </div>
+        <div class="card half">
+          <div class="card-title">Motivos de No Aprobación <span class="tag">% sobre rechazos</span></div>
+          <div class="chart-wrap h200"><canvas id="chartRechazos"></canvas></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card full">
+          <div class="card-title">Evolución Mensual — Aprobaciones vs Rechazos <span class="tag">2024</span></div>
+          <div class="chart-wrap h180"><canvas id="chartAprovTend"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         PAGE 3: CLASIFICACIÓN CDG
+    ════════════════════════════════════════ -->
+    <div class="page" id="page-3">
+      <div class="page-title">🏷️ Clasificación CDG — Control de Gestión <span>Distribución y segmentación</span></div>
+
+      <div class="row">
+        <div class="kpi">
+          <div class="kpi-label">Total Casos CDG</div>
+          <div class="kpi-value">680</div>
+          <div class="kpi-delta">▲ +6%</div>
+        </div>
+        <div class="kpi orange">
+          <div class="kpi-label">Requiere Compra</div>
+          <div class="kpi-value">420</div>
+          <div class="kpi-delta">61.8% del total</div>
+        </div>
+        <div class="kpi teal">
+          <div class="kpi-label">No Requiere Compra</div>
+          <div class="kpi-value">260</div>
+          <div class="kpi-delta">38.2% del total</div>
+        </div>
+        <div class="kpi green">
+          <div class="kpi-label">MRR Requiere Compra</div>
+          <div class="kpi-value">$28.5M</div>
+          <div class="kpi-delta">▲ +9%</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">MRR Conectividad</div>
+          <div class="kpi-value">$16.8M</div>
+          <div class="kpi-delta">▲ +4%</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card third">
+          <div class="card-title">Distribución CDG <span class="tag">Casos</span></div>
+          <div class="chart-wrap h200"><canvas id="chartCDG"></canvas></div>
+        </div>
+        <div class="card" style="flex:2;">
+          <div class="card-title">Desglose por Tipo de Servicio — No Requiere Compra <span class="tag">Conectividad</span></div>
+          <div class="chart-wrap h200"><canvas id="chartServicio"></canvas></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card full">
+          <div class="card-title">Evolución CDG por Mes — Requiere vs No Requiere Compra <span class="tag">2024</span></div>
+          <div class="chart-wrap h180"><canvas id="chartCDGTend"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         PAGE 4: VENDOR MANAGEMENT
+    ════════════════════════════════════════ -->
+    <div class="page" id="page-4">
+      <div class="page-title">🏭 Vendor Management <span>Gestión de proveedores y fabricantes</span></div>
+
+      <div class="info-bar">🏭 Tiempo promedio asignación de vendor: <strong>2.3 días hábiles</strong></div>
+
+      <div class="row">
+        <div class="kpi">
+          <div class="kpi-label">Casos con Vendor</div>
+          <div class="kpi-value">420</div>
+          <div class="kpi-sub">Requieren compra</div>
+        </div>
+        <div class="kpi green">
+          <div class="kpi-label">Vendors Activos</div>
+          <div class="kpi-value">38</div>
+          <div class="kpi-sub">Proveedores únicos</div>
+        </div>
+        <div class="kpi orange">
+          <div class="kpi-label">Fabricantes</div>
+          <div class="kpi-value">12</div>
+          <div class="kpi-sub">Fabricantes distintos</div>
+        </div>
+        <div class="kpi teal">
+          <div class="kpi-label">MRR Vendor</div>
+          <div class="kpi-value">$18.5M</div>
+          <div class="kpi-sub">MRR asociado</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card half">
+          <div class="card-title">Top Fabricantes por Volumen (# casos) <span class="tag">Ranking</span></div>
+          <div class="chart-wrap h220"><canvas id="chartVendorVol"></canvas></div>
+        </div>
+        <div class="card half">
+          <div class="card-title">Top Fabricantes por Valor MRR (M$) <span class="tag">Ranking</span></div>
+          <div class="chart-wrap h220"><canvas id="chartVendorMRR"></canvas></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card full">
+          <div class="card-title">Distribución de Casos por Vendor — Todos los Fabricantes</div>
+          <div class="chart-wrap h180"><canvas id="chartVendorPie"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════
+         PAGE 5: COMPRAS Y EMISIONES
+    ════════════════════════════════════════ -->
+    <div class="page" id="page-5">
+      <div class="page-title">📦 Compras y Emisiones <span>Ejecución y cierre del proceso</span></div>
+
+      <div class="row">
+        <div class="card full">
+          <div class="card-title">Estado del Proceso de Compras — Pipeline</div>
+          <div class="stages">
+            <div class="stage-box s-rev">
+              <div class="s-num">45</div>
+              <div class="s-lbl">En Revisión</div>
+              <div class="s-val">$2.1M MRR</div>
+            </div>
+            <div class="stage-box s-neg">
+              <div class="s-num">32</div>
+              <div class="s-lbl">Negociación</div>
+              <div class="s-val">$1.8M MRR</div>
+            </div>
+            <div class="stage-box s-for">
+              <div class="s-num">28</div>
+              <div class="s-lbl">Formalización</div>
+              <div class="s-val">$1.5M MRR</div>
+            </div>
+            <div class="stage-box s-emi">
+              <div class="s-num">385</div>
+              <div class="s-lbl">Emitido PO</div>
+              <div class="s-val">$25M MRR</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Emission cards -->
+      <div class="row">
+        <div class="card full">
+          <div class="card-title">Salidas Finales del Proceso</div>
+          <div class="emi-cards">
+            <div class="emi-card po">
+              <div class="e-icon">📄</div>
+              <div class="e-num">385</div>
+              <div class="e-lbl">Órdenes de Compra (PO)</div>
+              <div class="e-detail">MRR: $25M · CU: $8M</div>
+              <div class="e-pct">Conversión: 92%</div>
+            </div>
+            <div class="emi-card ped">
+              <div class="e-icon">📋</div>
+              <div class="e-num">245</div>
+              <div class="e-lbl">Pedidos</div>
+              <div class="e-detail">MRR: $8M · CU: $2M</div>
+              <div class="e-pct">Conversión: 94%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card half">
+          <div class="card-title">Distribución PO vs Pedido <span class="tag">Emisiones</span></div>
+          <div class="chart-wrap h200"><canvas id="chartEmiPie"></canvas></div>
+        </div>
+        <div class="card half">
+          <div class="card-title">Evolución Mensual de Emisiones <span class="tag">2024</span></div>
+          <div class="chart-wrap h200"><canvas id="chartEmiTend"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const C = { blue:'#003366', lblue:'#1565c0', teal:'#00B5E2', orange:'#FF6600', green:'#28A745', red:'#DC3545', yellow:'#FFC107', purple:'#6a1b9a', gray:'#aaa' };
+const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const DEF = { responsive:true, maintainAspectRatio:true, plugins:{ legend:{ labels:{ font:{ size:11 }, boxWidth:12 } } } };
+
+function showPage(idx) {
+  document.querySelectorAll('.page').forEach((p,i) => p.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+}
+
+/* ── PAGE 0 charts ── */
+new Chart('chartFunnel', {
+  type:'bar',
+  data:{
+    labels:['OPP F1','Preaprobados','Aprobac.\nMiami','CDG','Vendor\nMgmt','Compras','Emitido'],
+    datasets:[{
+      label:'# Oportunidades',
+      data:[1247,892,756,680,420,400,385],
+      backgroundColor:[C.blue,C.lblue,'#e65100','#c62828','#2e7d32',C.purple,'#00838f'],
+      borderRadius:4, borderSkipped:false
+    }]
+  },
+  options:{...DEF, plugins:{...DEF.plugins, legend:{display:false}},
+    scales:{y:{grid:{color:'#f0f2f5'},ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}
+  }
+});
+
+new Chart('chartPieMRR', {
+  type:'doughnut',
+  data:{
+    labels:['Aprobación Miami','CDG','Vendor Mgmt','Compras'],
+    datasets:[{data:[27.8,25.3,18.5,17.2], backgroundColor:[C.orange,C.red,C.green,C.purple], borderWidth:2}]
+  },
+  options:{...DEF, cutout:'60%'}
+});
+
+new Chart('chartTemporal', {
+  type:'bar',
+  data:{
+    labels:MONTHS,
+    datasets:[
+      {type:'line', label:'MRR (M$)', data:[10,14,18,21,25,28,32,35,38,40,43,45], borderColor:C.blue, backgroundColor:'transparent', yAxisID:'y', tension:.3, borderWidth:2.5, pointRadius:3},
+      {type:'line', label:'CU (M$)', data:[3,4,5,6,7,8,9,10,11,11,12,12.8], borderColor:C.orange, backgroundColor:'transparent', yAxisID:'y', tension:.3, borderWidth:2, borderDash:[4,3], pointRadius:3},
+      {type:'bar', label:'# Casos', data:[85,92,105,110,118,130,142,155,162,158,170,165], backgroundColor:'rgba(0,181,226,.18)', yAxisID:'y2'}
+    ]
+  },
+  options:{...DEF, scales:{
+    y:{position:'left', grid:{color:'#f0f2f5'}, ticks:{font:{size:10}}},
+    y2:{position:'right', grid:{display:false}, ticks:{font:{size:10}}}
+  }}
+});
+
+/* ── PAGE 1 charts ── */
+new Chart('chartConversion', {
+  type:'bar',
+  data:{
+    labels:['F1→Pre','Pre→Miami','Miami→CDG','CDG→Vendor','Vendor→Compras','Compras→Emitido'],
+    datasets:[{label:'% Conversión', data:[71.5,84.7,90.0,61.8,95.2,96.3],
+      backgroundColor:'rgba(0,51,102,.7)', borderRadius:4}]
+  },
+  options:{...DEF, indexAxis:'y',
+    plugins:{...DEF.plugins, legend:{display:false}},
+    scales:{x:{max:100, ticks:{callback:v=>v+'%', font:{size:10}}}, y:{ticks:{font:{size:10}}}}
+  }
+});
+
+new Chart('chartSLA', {
+  type:'bar',
+  data:{
+    labels:['OPP F1','Aprobación Miami','CDG','Vendor Mgmt','Compras'],
+    datasets:[
+      {label:'Promedio real (días)', data:[2.1,4.5,1.8,2.3,8.2], backgroundColor:C.blue, borderRadius:3},
+      {label:'SLA objetivo (días)', data:[3,5,2,3,10], backgroundColor:'rgba(255,193,7,.5)', borderRadius:3}
+    ]
+  },
+  options:{...DEF, scales:{y:{ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}}}}
+});
+
+/* ── PAGE 2 charts ── */
+new Chart('chartAprov', {
+  type:'doughnut',
+  data:{
+    labels:['Aprobado ✅','No Aprobado ❌','Cancelado ⊘'],
+    datasets:[{data:[680,76,45], backgroundColor:[C.green,C.red,'#9e9e9e'], borderWidth:2}]
+  },
+  options:{...DEF, cutout:'55%'}
+});
+
+new Chart('chartRechazos', {
+  type:'bar',
+  data:{
+    labels:['Doc. incompleta','Valor fuera\nde política','Cliente\nrestrictivo','Falta de\nmargen'],
+    datasets:[{label:'% Motivo', data:[35,28,22,15],
+      backgroundColor:[C.red,'#e57373','#ef9a9a','#ffcdd2'], borderRadius:4}]
+  },
+  options:{...DEF, indexAxis:'y',
+    plugins:{...DEF.plugins, legend:{display:false}},
+    scales:{x:{max:40, ticks:{callback:v=>v+'%', font:{size:10}}}, y:{ticks:{font:{size:10}}}}
+  }
+});
+
+new Chart('chartAprovTend', {
+  type:'bar',
+  data:{
+    labels:MONTHS,
+    datasets:[
+      {label:'Aprobados', data:[52,58,65,60,72,68,75,80,78,82,85,80], backgroundColor:'rgba(40,167,69,.7)', borderRadius:3},
+      {label:'Rechazados', data:[8,6,7,9,5,8,6,7,8,5,6,7], backgroundColor:'rgba(220,53,69,.7)', borderRadius:3}
+    ]
+  },
+  options:{...DEF, scales:{x:{stacked:false, ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}}}}
+});
+
+/* ── PAGE 3 charts ── */
+new Chart('chartCDG', {
+  type:'pie',
+  data:{
+    labels:['Requiere Compra 🛒','No Requiere Compra 🌐'],
+    datasets:[{data:[420,260], backgroundColor:[C.orange,'#00B5E2'], borderWidth:2}]
+  },
+  options:{...DEF}
+});
+
+new Chart('chartServicio', {
+  type:'bar',
+  data:{
+    labels:['Internet\nDedicado','MPLS','SD-WAN','Otros'],
+    datasets:[{label:'% Distribución', data:[45,25,20,10],
+      backgroundColor:[C.teal,'#0288d1','#039be5','#b0bec5'], borderRadius:4}]
+  },
+  options:{...DEF, plugins:{...DEF.plugins, legend:{display:false}},
+    scales:{y:{max:55, ticks:{callback:v=>v+'%', font:{size:10}}}, x:{ticks:{font:{size:10}}}}
+  }
+});
+
+new Chart('chartCDGTend', {
+  type:'bar',
+  data:{
+    labels:MONTHS,
+    datasets:[
+      {label:'Requiere Compra', data:[30,33,36,34,38,40,42,38,40,42,44,43], backgroundColor:'rgba(255,102,0,.7)', borderRadius:3},
+      {label:'No Requiere Compra', data:[18,20,22,21,24,25,26,24,25,26,28,27], backgroundColor:'rgba(0,181,226,.7)', borderRadius:3}
+    ]
+  },
+  options:{...DEF, scales:{x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}}}}
+});
+
+/* ── PAGE 4 charts ── */
+new Chart('chartVendorVol', {
+  type:'bar',
+  data:{
+    labels:['Fabricante A','Fabricante B','Fabricante C','Fabricante D','Otros'],
+    datasets:[{label:'# Casos', data:[180,145,95,75,50],
+      backgroundColor:[C.blue,C.lblue,'#1976d2','#42a5f5','#90caf9'], borderRadius:4}]
+  },
+  options:{...DEF, indexAxis:'y',
+    plugins:{...DEF.plugins, legend:{display:false}},
+    scales:{x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}}}
+  }
+});
+
+new Chart('chartVendorMRR', {
+  type:'bar',
+  data:{
+    labels:['Fabricante C','Fabricante A','Fabricante B','Fabricante D','Otros'],
+    datasets:[{label:'MRR (M$)', data:[12,9,7,5,3],
+      backgroundColor:[C.green,'#388e3c','#66bb6a','#a5d6a7','#c8e6c9'], borderRadius:4}]
+  },
+  options:{...DEF, indexAxis:'y',
+    plugins:{...DEF.plugins, legend:{display:false}},
+    scales:{x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}}}
+  }
+});
+
+new Chart('chartVendorPie', {
+  type:'doughnut',
+  data:{
+    labels:['Fabricante A','Fabricante B','Fabricante C','Fabricante D','Otros'],
+    datasets:[{data:[180,145,95,75,50],
+      backgroundColor:[C.blue,C.lblue,'#1976d2','#42a5f5','#90caf9'], borderWidth:2}]
+  },
+  options:{...DEF, cutout:'50%'}
+});
+
+/* ── PAGE 5 charts ── */
+new Chart('chartEmiPie', {
+  type:'doughnut',
+  data:{
+    labels:['Órdenes de Compra (PO)','Pedidos'],
+    datasets:[{data:[385,245], backgroundColor:[C.lblue,C.green], borderWidth:2}]
+  },
+  options:{...DEF, cutout:'55%'}
+});
+
+new Chart('chartEmiTend', {
+  type:'bar',
+  data:{
+    labels:MONTHS,
+    datasets:[
+      {label:'PO emitidas', data:[28,30,34,32,36,38,40,36,38,40,42,41], backgroundColor:'rgba(21,101,192,.7)', borderRadius:3},
+      {label:'Pedidos emitidos', data:[17,19,20,18,22,24,25,22,23,25,27,26], backgroundColor:'rgba(40,167,69,.7)', borderRadius:3}
+    ]
+  },
+  options:{...DEF, scales:{x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}}}}
+});
+</script>
+</body>
+</html>
